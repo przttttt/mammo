@@ -1,0 +1,4 @@
+-r requirements-notebook.txt
+
+# Optional neural network experiment
+tensorflow==2.20.0

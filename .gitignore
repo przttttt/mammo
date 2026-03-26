@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.DS_Store
+
+venv/
+
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+models/*.pkl
+models/*.keras
+models/tensorflow_model/
+models/comparison_summary.csv
