@@ -18,7 +18,8 @@ What the repo includes:
 - notebook-based model comparison and validation ranking
 - deployable CLI workflows for `Logistic Regression`, `SVM`, and `TensorFlow NN`
 - repeatable train / compare / predict commands
-- smoke tests for all deployable model paths
+- shared model definitions to keep CLIs and comparisons aligned
+- smoke tests plus GitHub Actions validation for deployable model paths
 
 ---
 
@@ -27,10 +28,10 @@ What the repo includes:
 | Model | Holdout Snapshot | Artifact | Position |
 |---|---|---|---|
 | Logistic Regression | `0.9737 acc` / `0.9960 auc` | `models/logreg_model.pkl` | strongest lightweight baseline |
-| SVM | `0.9737 acc` / `0.9947 auc` | `models/svm_model.pkl` | margin-based baseline |
+| SVM | `0.9649 acc` / `0.9947 auc` | `models/svm_model.pkl` | margin-based baseline |
 | TensorFlow NN | `0.9649 acc` / `0.9917 auc` | `models/tensorflow_model/` | neural-network baseline |
 
-Holdout metrics above come from the current CLI comparison flow in `scripts/compare_models.py`.
+Holdout metrics above come from the current comparison flow in `scripts/compare_models.py`.
 
 ---
 
@@ -43,11 +44,11 @@ flowchart LR
     C --> D1["Logistic Regression CLI"]
     C --> D2["SVM CLI"]
     C --> D3["TensorFlow CLI"]
-    D1 --> E["Holdout Comparison"]
+    D1 --> E["Holdout + CV Report"]
     D2 --> E
     D3 --> E
-    E --> F["Saved Artifacts"]
-    F --> G["Row Predictions"]
+    E --> F["Saved Artifacts + Results"]
+    F --> G["Row Or JSON Predictions"]
 ```
 
 ---
@@ -97,9 +98,10 @@ Each training command:
 
 - loads the WDBC dataset
 - trains on the training split
+- tunes the decision threshold from cross-validation on the training split
 - evaluates on the untouched holdout split
 - saves the exact evaluated artifact
-- stores split and metric metadata with the artifact
+- stores split, threshold, and metric metadata with the artifact
 
 ### Compare
 
@@ -111,15 +113,16 @@ This command:
 
 - evaluates `Logistic Regression` and `SVM` on the same holdout split
 - includes `TensorFlow NN` when TensorFlow extras are installed
+- tunes thresholds from training cross-validation
 - prints one clean comparison table
-- saves the result to `models/comparison_summary.csv`
+- saves summary CSV and detailed JSON into `results/`
 
 Current CLI comparison snapshot:
 
 | Model | Accuracy | Precision | Recall | F1 | ROC-AUC |
 |---|---:|---:|---:|---:|---:|
-| Logistic Regression | 0.9737 | 0.9756 | 0.9524 | 0.9639 | 0.9960 |
-| SVM | 0.9737 | 1.0000 | 0.9286 | 0.9630 | 0.9947 |
+| Logistic Regression | 0.9737 | 1.0000 | 0.9286 | 0.9630 | 0.9960 |
+| SVM | 0.9649 | 0.9524 | 0.9524 | 0.9524 | 0.9947 |
 | TensorFlow NN | 0.9649 | 0.9750 | 0.9286 | 0.9512 | 0.9917 |
 
 ### Predict
@@ -128,6 +131,7 @@ Current CLI comparison snapshot:
 python scripts/logreg_cli.py predict --row-index 0
 python scripts/svm_cli.py predict --row-index 0
 python scripts/tensorflow_cli.py predict --row-index 0
+python scripts/logreg_cli.py predict --input-json path/to/features.json
 ```
 
 Prediction output includes:
@@ -137,6 +141,12 @@ Prediction output includes:
 - actual diagnosis
 - predicted diagnosis
 - malignant probability
+- tuned decision threshold
+
+For custom prediction input, pass either:
+
+- a JSON object string with all 30 feature values
+- a path to a JSON file with the same feature keys
 
 ### Test
 
@@ -144,7 +154,9 @@ Prediction output includes:
 python -m unittest discover -s tests
 ```
 
-The smoke suite checks that each CLI can train, save its artifact, and run `predict --row-index 0`.
+The test suite checks artifact metadata, row-index prediction, JSON-input prediction, compare-script exports, and invalid input handling.
+
+CI runs the same suite in GitHub Actions on push and pull requests.
 
 ---
 
@@ -192,7 +204,6 @@ mammo/
 │   ├── wdbc.data
 │   └── wdbc.names
 ├── models/
-│   ├── comparison_summary.csv
 │   ├── logreg_model.pkl
 │   ├── svm_model.pkl
 │   └── tensorflow_model/
@@ -204,6 +215,9 @@ mammo/
 │   ├── requirements.txt
 │   ├── requirements-notebook.txt
 │   └── requirements-tensorflow.txt
+├── results/
+│   ├── comparison_report.json
+│   └── comparison_summary.csv
 ├── scripts/
 │   ├── compare_models.py
 │   ├── logreg_cli.py
@@ -225,6 +239,7 @@ mammo/
 - `requirements/requirements.txt` is the minimal CLI install
 - `requirements/requirements-notebook.txt` adds notebook tooling
 - `requirements/requirements-tensorflow.txt` adds TensorFlow support
+- `results/` stores generated comparison exports
 - this project is for **educational and research use only**
 - it is **not** intended for real clinical diagnosis
 

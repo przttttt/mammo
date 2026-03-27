@@ -14,3 +14,5 @@ models/*.pkl
 models/*.keras
 models/tensorflow_model/
 models/comparison_summary.csv
+results/*.csv
+results/*.json

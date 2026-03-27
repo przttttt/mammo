@@ -1,21 +1,25 @@
 import argparse
+from typing import Optional
+import warnings
 
 from sklearn import __version__ as sklearn_version
-from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
+from sklearn.metrics import classification_report
 
 from model_utils import (
     DATA,
     MODELS_DIR,
     RANDOM_STATE,
     TEST_SIZE,
+    build_svm_model,
+    compute_metrics,
     load_bundle,
     load_df,
+    load_input_json,
     print_prediction,
     save_bundle,
+    split_features_target,
+    split_holdout,
+    tune_sklearn_threshold,
     validate_row_index,
 )
 
@@ -24,26 +28,21 @@ MODEL = MODELS_DIR / "svm_model.pkl"
 
 def train():
     df = load_df()
-    X = df.drop(columns=["id", "diagnosis", "target"])
-    y = df["target"]
+    X, y = split_features_target(df)
+    X_train, X_test, y_train, y_test = split_holdout(X, y)
+    threshold, cv_metrics = tune_sklearn_threshold(build_svm_model, X_train, y_train)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=TEST_SIZE,
-        stratify=y,
-        random_state=RANDOM_STATE,
-    )
-    model = Pipeline([("scaler", StandardScaler()), ("svm", SVC(kernel="rbf", probability=True, random_state=RANDOM_STATE))])
-    model.fit(X_train, y_train)
+    model = build_svm_model()
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        model.fit(X_train, y_train)
+        prob = model.predict_proba(X_test)[:, 1]
+    metrics = compute_metrics(y_test, prob, threshold)
+    pred = (prob >= threshold).astype(int)
 
-    pred = model.predict(X_test)
-    prob = model.predict_proba(X_test)[:, 1]
-    roc_auc = float(round(roc_auc_score(y_test, prob), 4))
-    accuracy = float(round(accuracy_score(y_test, pred), 4))
-
-    print("SVM holdout ROC-AUC:", roc_auc)
-    print("SVM holdout accuracy:", accuracy)
+    print("SVM holdout ROC-AUC:", metrics["roc_auc"])
+    print("SVM holdout accuracy:", metrics["accuracy"])
+    print("SVM decision threshold:", metrics["threshold"])
     print(classification_report(y_test, pred, target_names=["Benign", "Malignant"]))
 
     bundle = {
@@ -59,10 +58,9 @@ def train():
                 "train_rows": int(len(X_train)),
                 "test_rows": int(len(X_test)),
             },
-            "metrics": {
-                "holdout_roc_auc": roc_auc,
-                "holdout_accuracy": accuracy,
-            },
+            "threshold": metrics["threshold"],
+            "metrics": metrics,
+            "cv_metrics": cv_metrics,
             "sklearn_version": sklearn_version,
         },
     }
@@ -71,20 +69,25 @@ def train():
     print("Saved artifact:", bundle["metadata"]["artifact"])
 
 
-def predict(row_index: int):
+def predict(row_index: Optional[int], input_json: Optional[str]):
     if not MODEL.exists():
         raise SystemExit("Model not found. Run: python scripts/svm_cli.py train")
 
     bundle = load_bundle(MODEL)
     model = bundle["model"]
-    df = load_df()
-
-    validate_row_index(df, row_index)
-    row = df.iloc[row_index]
-    X_row = row[bundle["columns"]].to_frame().T
-    prob = float(model.predict_proba(X_row)[0, 1])
     metadata = bundle["metadata"]
-    print_prediction(row_index, row, prob, metadata["artifact"], metadata["split"]["random_state"])
+    threshold = metadata.get("threshold", 0.5)
+
+    row = None
+    if row_index is not None:
+        df = load_df()
+        validate_row_index(df, row_index)
+        row = df.iloc[row_index]
+        X_row = row[bundle["columns"]].to_frame().T
+    else:
+        X_row = load_input_json(bundle["columns"], input_json)
+    prob = float(model.predict_proba(X_row)[0, 1])
+    print_prediction(prob, metadata["artifact"], metadata["split"]["random_state"], threshold, row_index=row_index, row=row)
 
 
 parser = argparse.ArgumentParser(description="Minimal SVM CLI for the WDBC dataset")
@@ -92,11 +95,13 @@ sub = parser.add_subparsers(dest="command", required=True)
 sub.add_parser("train", help="Train SVM on the WDBC dataset and save the model")
 
 predict_parser = sub.add_parser("predict", help="Predict diagnosis for an existing dataset row")
-predict_parser.add_argument("--row-index", type=int, required=True, help="Row index from data/wdbc.data")
+predict_group = predict_parser.add_mutually_exclusive_group(required=True)
+predict_group.add_argument("--row-index", type=int, help="Row index from data/wdbc.data")
+predict_group.add_argument("--input-json", type=str, help="JSON object or path to JSON file with feature values")
 
 args = parser.parse_args()
 
 if args.command == "train":
     train()
 else:
-    predict(args.row_index)
+    predict(args.row_index, args.input_json)
