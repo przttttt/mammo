@@ -33,6 +33,7 @@ class TestCliSmoke(unittest.TestCase):
         self.assertIn("Saved artifact: evaluated_holdout_model", train.stdout)
         self.assertTrue((ROOT / "models" / "svm_model.pkl").exists())
         bundle = pickle.loads((ROOT / "models" / "svm_model.pkl").read_bytes())
+        self.assertEqual(bundle["metadata"]["artifact_schema_version"], 1)
         self.assertIn("threshold", bundle["metadata"])
         self.assertIn("cv_metrics", bundle["metadata"])
 
@@ -47,6 +48,7 @@ class TestCliSmoke(unittest.TestCase):
         self.assertIn("Saved artifact: evaluated_holdout_model", train.stdout)
         self.assertTrue((ROOT / "models" / "logreg_model.pkl").exists())
         bundle = pickle.loads((ROOT / "models" / "logreg_model.pkl").read_bytes())
+        self.assertEqual(bundle["metadata"]["artifact_schema_version"], 1)
         self.assertIn("threshold", bundle["metadata"])
         self.assertIn("cv_metrics", bundle["metadata"])
 
@@ -102,6 +104,21 @@ class TestCliSmoke(unittest.TestCase):
         self.assertNotEqual(invalid.returncode, 0)
         self.assertIn("Row index must be between", invalid.stderr)
 
+    def test_logreg_rejects_invalid_artifact_schema(self):
+        run_cli("scripts/logreg_cli.py", "train")
+        artifact_path = ROOT / "models" / "logreg_model.pkl"
+        original_bytes = artifact_path.read_bytes()
+        try:
+            bundle = pickle.loads(original_bytes)
+            bundle["metadata"].pop("artifact_schema_version", None)
+            artifact_path.write_bytes(pickle.dumps(bundle))
+
+            predict = run_cli("scripts/logreg_cli.py", "predict", "--row-index", "0")
+            self.assertNotEqual(predict.returncode, 0)
+            self.assertIn("Retrain the model artifact", predict.stderr)
+        finally:
+            artifact_path.write_bytes(original_bytes)
+
     def test_compare_models_exports_results(self):
         compare = subprocess.run(
             [str(PYTHON), "scripts/compare_models.py"],
@@ -118,6 +135,32 @@ class TestCliSmoke(unittest.TestCase):
         self.assertTrue(any(row["model"] == "Logistic Regression" for row in report))
         self.assertTrue(all("calibration_bins" in row for row in report))
 
+    def test_update_readme_metrics_from_report(self):
+        compare = subprocess.run(
+            [str(PYTHON), "scripts/compare_models.py"],
+            cwd=ROOT,
+            env={**os.environ, "MAMMO_SKIP_TENSORFLOW": "1"},
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(compare.returncode, 0, compare.stderr)
+
+        readme_path = ROOT / "README.md"
+        original = readme_path.read_text(encoding="utf-8")
+        try:
+            modified = original.replace("| Logistic Regression | `0.9737 acc` / `0.9960 auc` |", "| Logistic Regression | `0.0000 acc` / `0.0000 auc` |")
+            readme_path.write_text(modified, encoding="utf-8")
+
+            update = run_cli("scripts/update_readme_metrics.py")
+            self.assertEqual(update.returncode, 0, update.stderr)
+
+            refreshed = readme_path.read_text(encoding="utf-8")
+            self.assertIn("| Logistic Regression | `0.9737 acc` / `0.9960 auc` |", refreshed)
+            self.assertIn("| SVM | 0.9649 | 0.9524 | 0.9524 | 0.9524 | 0.9947 |", refreshed)
+        finally:
+            readme_path.write_text(original, encoding="utf-8")
+
     @unittest.skipUnless(importlib.util.find_spec("tensorflow") is not None, "TensorFlow is not installed")
     def test_tensorflow_train_and_predict(self):
         train = run_cli("scripts/tensorflow_cli.py", "train")
@@ -126,6 +169,7 @@ class TestCliSmoke(unittest.TestCase):
         self.assertTrue((ROOT / "models" / "tensorflow_model" / "model.keras").exists())
         self.assertTrue((ROOT / "models" / "tensorflow_model" / "metadata.pkl").exists())
         bundle = pickle.loads((ROOT / "models" / "tensorflow_model" / "metadata.pkl").read_bytes())
+        self.assertEqual(bundle["metadata"]["artifact_schema_version"], 1)
         self.assertIn("threshold", bundle["metadata"])
         self.assertIn("cv_metrics", bundle["metadata"])
 

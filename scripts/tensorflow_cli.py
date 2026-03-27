@@ -5,6 +5,7 @@ from sklearn.metrics import classification_report
 from sklearn.preprocessing import StandardScaler
 
 from model_utils import (
+    ARTIFACT_SCHEMA_VERSION,
     DATA,
     MODELS_DIR,
     RANDOM_STATE,
@@ -61,6 +62,7 @@ def train():
         "scaler": scaler,
         "metadata": {
             "artifact": "evaluated_holdout_model",
+            "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
             "model_name": "TensorFlow NN",
             "dataset": DATA.name,
             "split": {

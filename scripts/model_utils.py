@@ -23,6 +23,7 @@ RESULTS_DIR = ROOT / "results"
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
 CV_FOLDS = 3
+ARTIFACT_SCHEMA_VERSION = 1
 
 FEATURES = [
     "radius",
@@ -115,7 +116,25 @@ def save_bundle(path: Path, bundle):
 
 
 def load_bundle(path: Path):
-    return pickle.loads(path.read_bytes())
+    bundle = pickle.loads(path.read_bytes())
+    validate_bundle(bundle, path)
+    return bundle
+
+
+def validate_bundle(bundle, path: Path):
+    if not isinstance(bundle, dict):
+        raise SystemExit(f"Invalid model artifact at {path}: expected a dictionary bundle.")
+
+    metadata = bundle.get("metadata")
+    if not isinstance(metadata, dict):
+        raise SystemExit(f"Invalid model artifact at {path}: missing metadata block.")
+
+    version = metadata.get("artifact_schema_version")
+    if version != ARTIFACT_SCHEMA_VERSION:
+        raise SystemExit(
+            f"Unsupported model artifact at {path}: schema version {version!r} does not match expected version "
+            f"{ARTIFACT_SCHEMA_VERSION}. Retrain the model artifact."
+        )
 
 
 def validate_row_index(df, row_index: int):

@@ -6,6 +6,7 @@ from sklearn import __version__ as sklearn_version
 from sklearn.metrics import classification_report
 
 from model_utils import (
+    ARTIFACT_SCHEMA_VERSION,
     DATA,
     MODELS_DIR,
     RANDOM_STATE,
@@ -50,6 +51,7 @@ def train():
         "columns": X.columns.tolist(),
         "metadata": {
             "artifact": "evaluated_holdout_model",
+            "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
             "model_name": "SVM (RBF kernel)",
             "dataset": DATA.name,
             "split": {

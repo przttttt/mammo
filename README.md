@@ -25,11 +25,13 @@ What the repo includes:
 
 ## Snapshot
 
+<!-- snapshot-table:start -->
 | Model | Holdout Snapshot | Artifact | Position |
 |---|---|---|---|
 | Logistic Regression | `0.9737 acc` / `0.9960 auc` | `models/logreg_model.pkl` | strongest lightweight baseline |
 | SVM | `0.9649 acc` / `0.9947 auc` | `models/svm_model.pkl` | margin-based baseline |
 | TensorFlow NN | `0.9649 acc` / `0.9917 auc` | `models/tensorflow_model/` | neural-network baseline |
+<!-- snapshot-table:end -->
 
 Holdout metrics above come from the current comparison flow in `scripts/compare_models.py`.
 
@@ -101,12 +103,13 @@ Each training command:
 - tunes the decision threshold from cross-validation on the training split
 - evaluates on the untouched holdout split
 - saves the exact evaluated artifact
-- stores split, threshold, and metric metadata with the artifact
+- stores split, threshold, metric metadata, and artifact schema version with the artifact
 
 ### Compare
 
 ```bash
 python scripts/compare_models.py
+python scripts/update_readme_metrics.py
 ```
 
 This command:
@@ -116,14 +119,17 @@ This command:
 - tunes thresholds from training cross-validation
 - prints one clean comparison table
 - saves summary CSV and detailed JSON into `results/`
+- lets you regenerate the README metric tables from the saved JSON report
 
 Current CLI comparison snapshot:
 
+<!-- compare-table:start -->
 | Model | Accuracy | Precision | Recall | F1 | ROC-AUC |
 |---|---:|---:|---:|---:|---:|
 | Logistic Regression | 0.9737 | 1.0000 | 0.9286 | 0.9630 | 0.9960 |
 | SVM | 0.9649 | 0.9524 | 0.9524 | 0.9524 | 0.9947 |
 | TensorFlow NN | 0.9649 | 0.9750 | 0.9286 | 0.9512 | 0.9917 |
+<!-- compare-table:end -->
 
 ### Predict
 
@@ -240,6 +246,7 @@ mammo/
 - `requirements/requirements-notebook.txt` adds notebook tooling
 - `requirements/requirements-tensorflow.txt` adds TensorFlow support
 - `results/` stores generated comparison exports
+- saved model artifacts are schema-validated on load
 - this project is for **educational and research use only**
 - it is **not** intended for real clinical diagnosis
 
