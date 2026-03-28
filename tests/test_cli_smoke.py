@@ -158,6 +158,8 @@ class TestCliSmoke(unittest.TestCase):
             refreshed = readme_path.read_text(encoding="utf-8")
             self.assertIn("| Logistic Regression | `0.9737 acc` / `0.9960 auc` |", refreshed)
             self.assertIn("| SVM | 0.9649 | 0.9524 | 0.9524 | 0.9524 | 0.9947 |", refreshed)
+            self.assertIn("| TensorFlow NN | `0.9649 acc` / `0.9917 auc` | `models/tensorflow_model/` | neural-network baseline |", refreshed)
+            self.assertIn("| TensorFlow NN | 0.9649 | 0.9750 | 0.9286 | 0.9512 | 0.9917 |", refreshed)
         finally:
             readme_path.write_text(original, encoding="utf-8")
 
